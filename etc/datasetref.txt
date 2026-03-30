@@ -4,3 +4,18 @@ https://www.kaggle.com/datasets/sartajbhuvaji/brain-tumor-classification-mri
 seg
 https://www.kaggle.com/datasets/indk214/brain-tumor-dataset-segmentation-and-classification
 https://www.kaggle.com/datasets/atikaakter11/brain-tumor-segmentation-dataset
+https://www.kaggle.com/datasets/nikhilroxtomar/brain-tumor-segmentation
+https://www.kaggle.com/datasets/briscdataset/brisc2025
+https://www.kaggle.com/datasets/awsaf49/brats2020-training-data
+
+training - on cloud ~5.5h, on 3060 6h+
+
+longitidual brain dataset for growth prediction
+(https://www.cancerimagingarchive.net/collection/yale-brain-mets-longitudinal/ - 43gb - citation needed)
+(https://zenodo.org/records/17253793 - 15gb - citation asi taky needed)
+https://springernature.figshare.com/articles/dataset/LUMIERE_dataset_-_MRI_data_and_automated_segmentations/21249516?backTo=%2Fcollections%2FThe_LUMIERE_Dataset_Longitudinal_Glioblastoma_MRI_with_Expert_RANO_Evaluation%2F5904905&file=38249697
+radsi taky citace
+
+
+#TODO podivat se u vsech na citace
+

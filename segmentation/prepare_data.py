@@ -1,187 +1,168 @@
-# ungroup 1. dataset containing images & mask into separate folders
 import os
 import shutil
 import hashlib
 import random
+import csv
+import cv2
+import numpy as np
+import h5py
 
 
-categories = ['glioma', 'meningioma', 'pituitary']
-folder_types = ['masks', 'images']
-for folder in folder_types:
-     os.makedirs(f'cleaned_dataset/{folder}', exist_ok=True)
-     for tumor in categories:
-          os.makedirs(f'cleaned_dataset/{folder}/{tumor}', exist_ok=True)
+os.makedirs('grouped_dataset/images', exist_ok =True)
+os.makedirs('grouped_dataset/masks', exist_ok =True)
+
+# Dataset 1
+dataset_path = "datasets/dataset1"
+for tumor_folder in os.listdir(os.path.join(dataset_path, "image")):
+    if not os.path.isdir(os.path.join(dataset_path, "image", tumor_folder)): continue
+    for file in os.listdir(os.path.join(dataset_path, "image", tumor_folder)):
+        image_filename = os.path.join(dataset_path, "image", tumor_folder, file)
+        mask_filename = os.path.join(dataset_path, "mask", tumor_folder, file).replace('.jpg', '_m.jpg')
+        if os.path.exists(mask_filename):
+            shutil.copy(image_filename, os.path.join("grouped_dataset/images", file))
+            shutil.copy(mask_filename, os.path.join("grouped_dataset/masks", file))
+
+# Dataset 2
+dataset_path = "datasets/dataset2"
+for file in os.listdir(os.path.join(dataset_path, "images")):
+    image_path = os.path.join(dataset_path, "images", file)
+    mask_path = os.path.join(dataset_path, "masks", file)
+    if os.path.exists(mask_path):
+        shutil.copy(image_path, os.path.join("grouped_dataset/images", file))
+        shutil.copy(mask_path, os.path.join("grouped_dataset/masks", file))
+
+# Dataset 3
+dataset_path = "datasets/dataset3/segmentation_task"
+for type_folder in os.listdir(dataset_path):
+    if not os.path.isdir(os.path.join(dataset_path, type_folder)): continue
+    for file in os.listdir(os.path.join(dataset_path, type_folder, "images")):
+        image_path = os.path.join(dataset_path, type_folder, "images", file)
+        mask_path = os.path.join(dataset_path, type_folder, "masks", file).replace('.jpg', '.png')
+        if os.path.exists(mask_path):
+            shutil.copy(image_path, os.path.join("grouped_dataset/images", file))
+            shutil.copy(mask_path, os.path.join("grouped_dataset/masks", file))
+
+# Dataset 4
+dataset_path = "datasets/dataset4/Segmentation-masks&images"
+for type_folder in os.listdir(dataset_path):
+    if not os.path.isdir(os.path.join(dataset_path, type_folder)): continue
+    for file in os.listdir(os.path.join(dataset_path, type_folder)):
+        if file[-5] == "k": continue
+        image_path = os.path.join(dataset_path, type_folder, file)
+        mask_path = image_path[:-4] + "_mask.png"
+        if os.path.exists(mask_path):
+            shutil.copy(image_path, os.path.join("grouped_dataset/images", file))
+            shutil.copy(mask_path, os.path.join("grouped_dataset/masks", file))
 
 
-used_ids = set()
-folderpath = 'dataset-segmentation/Segmentation-masks&images'
-for tumor_folder in os.listdir(folderpath):
-     tumor_folder_path = os.path.join(folderpath, tumor_folder)
-     for file in os.listdir(tumor_folder_path):
-          file_path = os.path.join(tumor_folder_path, file)
-          id = ""
-          check = "0"
-        
-          for i in range(4, 9):
-            if i < len(file) and file[i].isdigit():
-                id += file[i]
-                
-          if id in used_ids:
-              continue
-          else:
-               used_ids.add(id)
+# brats dataset5
+csv_path = "datasets/dataset5/BraTS20 Training Metadata.csv"
+with open(csv_path, 'r') as f:
+    data = list(csv.DictReader(f))
 
-          if 'mask' in file.lower():
-               image_file = f"enh_{id}.png"
-               mask_file = file
-          else:
-               image_file = file
-               mask_file = f"enh_{id}_mask.png"
+# Filtrace
+target_files = [row for row in data if row['target'] == '1' and int(row['label1_pxl_cnt']) > 150]
+no_tumor_files = [row for row in data if row['target'] == '0' and 45 < int(row['slice']) < 120]
+if len(no_tumor_files) > 5000: no_tumor_files = random.sample(no_tumor_files, 5000)
+dataset_files = target_files + no_tumor_files
+random.shuffle(dataset_files)
 
-          mask_path = os.path.join(tumor_folder_path, mask_file)
-          image_path = os.path.join(tumor_folder_path, image_file)
+temp_path = 'dataset5_temp'
+if os.path.exists(temp_path): shutil.rmtree(temp_path)
+os.makedirs(f'{temp_path}/images', exist_ok=True)
+os.makedirs(f'{temp_path}/masks', exist_ok=True)
 
-          #get tumor type
-          if not tumor_folder.lower() in categories:
-               tumor_type = tumor_folder.split(" ")[0].lower()
-          else:
-               tumor_type = tumor_folder.lower()
+#ai code for convert brats h5 to png - needs rework ! 
+def crop_brain(img, mask, size=240):
+    coords = np.argwhere(img > 0)
+    if coords.size == 0: return img, mask
+    y_min, x_min = coords.min(axis=0); y_max, x_max = coords.max(axis=0)
+    cy, cx = (y_min + y_max) // 2, (x_min + x_max) // 2
+    h = size // 2
+    y1, x1 = max(0, cy - h), max(0, cx - h)
+    y2, x2 = min(img.shape[0], y1 + size), min(img.shape[1], x1 + size)
+    if y2 == img.shape[0]: y1 = max(0, y2 - size)
+    if x2 == img.shape[1]: x1 = max(0, x2 - size)
+    return img[y1:y2, x1:x2], mask[y1:y2, x1:x2]
 
-          shutil.move(image_path, f'cleaned_dataset/images/{tumor_type}/{image_file}')
-          shutil.move(mask_path, f'cleaned_dataset/masks/{tumor_type}/{mask_file}')
-     
-
-corrupted_paths = ['dataset-segmentation/image/0','dataset-segmentation/mask/0', 'dataset-segmentation/mask/1/Tr-gl_0899_m.jpg', 'dataset-segmentation/mask/2/Tr-me_0540.jpg']
-for path in corrupted_paths:
+for row in dataset_files:
+    h5_path_temp = row['slice_path'].replace('../input/brats2020-training-data/', '')
+    h5_path = os.path.join(os.getcwd(), 'datasets/dataset5', h5_path_temp)
+    if not os.path.exists(h5_path): continue
     try:
-        if os.path.isdir(path):
-            shutil.rmtree(path)
-        elif os.path.isfile(path):
-            os.remove(path)
-    except FileNotFoundError:
-        pass
+        with h5py.File(h5_path, 'r') as f:
+            img_data = f['image'][:]; mask_data = f['mask'][:]
+            mask_combined = np.max(mask_data, axis=-1)
+            flair = img_data[:, :, 3]
+            p1, p99 = np.percentile(flair, [1, 99])
+            img_norm = np.clip((flair-p1)/(p99-p1), 0, 1)*255 if p99>p1 else flair*0
+            img_c, mask_c = crop_brain(img_norm, mask_combined, size=240)
+            base = f"brats_{os.path.basename(h5_path).replace('.h5', '')}.png"
+            cv2.imwrite(os.path.join(temp_path, "images", base), img_c.astype(np.uint8))
+            cv2.imwrite(os.path.join(temp_path, "masks", base), (mask_c * 255).astype(np.uint8))
+    except Exception as e : 
+        print(f"Error processing {h5_path}: {e}")
 
-folders = ['image', 'mask']
-tumor_types = {1: 'glioma', 2: 'meningioma', 3:'pituitary'}
+# sjednoceni jmen
+def rename_and_copy(path, folder_type):
+    files = sorted(os.listdir(path))
+    for num, file in enumerate(files):
+        id = str(num).zfill(4)
+        curr_filepath = os.path.join('grouped_dataset', folder_type, file)
+        new_filepath = os.path.join('grouped_dataset', folder_type, f"{id}_tumor.jpg")
+        os.rename(curr_filepath, new_filepath)
 
-for tumor_id, tumor_name in tumor_types.items():
-    source_image = f'dataset-segmentation/image/{tumor_id}'
-    source_mask = f'dataset-segmentation/mask/{tumor_id}'
-
-    final_image = f'cleaned_dataset/images/{tumor_name}'
-    final_mask  = f'cleaned_dataset/masks/{tumor_name}'
-
-    for file in os.listdir(source_image):
-        shutil.move(os.path.join(source_image, file), os.path.join(final_image, file))
-    for file in os.listdir(source_mask):
-        shutil.move(os.path.join(source_mask, file), os.path.join(final_mask, file))
-
-shutil.rmtree('dataset-segmentation')
-
-
-#sjednoceni jmen files
-for tumor_type in os.listdir(os.path.join('cleaned_dataset', 'images')):
-    images_path = f'cleaned_dataset/images/{tumor_type}'
-    mask_path = f'cleaned_dataset/masks/{tumor_type}'
-    
-    def rename(path, folder_type):
-        files = sorted(os.listdir(path))
-        for num, file in enumerate(files):
-            id = str(num).zfill(4)
-
-            curr_filepath = os.path.join('cleaned_dataset', folder_type, tumor_type, file)
-            new_filepath = os.path.join('cleaned_dataset', folder_type, tumor_type, f"{id}_{tumor_type}.jpg")
-            os.rename(curr_filepath, new_filepath)
-
-    rename(images_path, "images")
-    rename(mask_path, "masks")
-            
-#check for duplicate images
+# check na duplikaty
 hashes = set()
-count = 0
-for folder_type in os.listdir("cleaned_dataset"):
-    for tumor_type in os.listdir(f"cleaned_dataset/{folder_type}"):
-        for file in os.listdir(f"cleaned_dataset/{folder_type}/{tumor_type}"):
-            filename = f"cleaned_dataset/{folder_type}/{tumor_type}/{file}"
-            with open(filename, "rb") as f:
-                file_hash = hashlib.md5(f.read()).hexdigest()
-                if file_hash not in hashes:
-                    hashes.add(file_hash)
-                else:
-                    count+=1 
-                    os.remove(filename)
-                    if folder_type == "masks":
-                        os.remove(f"cleaned_dataset/images/{tumor_type}/{file}")
-                    else:
-                        os.remove(f"cleaned_dataset/masks/{tumor_type}/{file}")
+for file in sorted(os.listdir('grouped_dataset/images')):
+    image_path = os.path.join("grouped_dataset/images", file)
+    with open(image_path, "rb") as f:
+        file_hash = hashlib.md5(f.read()).hexdigest()
+        if file_hash not in hashes: hashes.add(file_hash)
+        else:
+            os.remove(image_path)
+            os.remove(f"grouped_dataset/masks/{file}")
 
-for tumor_type in os.listdir(os.path.join('cleaned_dataset', 'images')):
-    images_path = f'cleaned_dataset/images/{tumor_type}'
-    mask_path = f'cleaned_dataset/masks/{tumor_type}'
-
-    rename(images_path, "images")
-    rename(mask_path, "masks")
-
-
-def count_images(path: str)-> str:
-    result = {}
-    for type_folder in os.listdir(path):
-        temp = []
-        for tumor_folder in os.listdir(f'{path}/{type_folder}'):
-            count = 0
-            for file in os.listdir(f'{path}/{type_folder}/{tumor_folder}'):
-                count+=1
-            temp.append(list([tumor_folder,count]))
-        result[type_folder] = temp
-
-    for i in result.keys():
-        print(f'{i}: {result[i]}')
-        
-count_images('cleaned_dataset')
-
-
-#crop data to 1203
-crop_num = 1202
-tumors_to_crop = ['pituitary', 'meningioma']
-for tumor in tumors_to_crop:
-    for file in os.listdir(f'cleaned_dataset/images/{tumor}/'):
-        id = file[:4]
-        if int(id) > crop_num:
-            file_name = f"{id}_{tumor}.jpg"
-            os.remove(f'cleaned_dataset/images/{tumor}/{file_name}')
-            os.remove(f'cleaned_dataset/masks/{tumor}/{file_name}')
-
-
-#split data into train,test,val 70/15/15
+# split
 random.seed(12)
+images_path = 'grouped_dataset/images/'
+files = os.listdir(images_path)
+random.shuffle(files)
+l = len(files)
+train = files[:int(0.7*l)]; test = files[int(0.7*l):int(0.85*l)]; val = files[int(0.85*l):]
 
-for tumor_type in os.listdir(os.path.join('cleaned_dataset', 'images')):
-    images_path = f'cleaned_dataset/images/{tumor_type}'
-    mask_path = f'cleaned_dataset/masks/{tumor_type}'
+for split, f_list in zip(["train", "test", "val"], [train, test, val]):
+    os.makedirs(f"dataset_split_segmentation/{split}/images/", exist_ok=True)
+    os.makedirs(f"dataset_split_segmentation/{split}/masks/", exist_ok=True)
+    for filename in f_list:
+        shutil.move(os.path.join("grouped_dataset", "images", filename), f"dataset_split_segmentation/{split}/images/{filename}")
+        shutil.move(os.path.join("grouped_dataset", "masks", filename), f"dataset_split_segmentation/{split}/masks/{filename}")
 
-    files = [x for x in os.listdir(images_path)]
-    random.shuffle(files)
+if os.path.exists("grouped_dataset"): shutil.rmtree("grouped_dataset")
 
-    length = len(files)
-    train = files[:int(0.7*length)]
-    test = files[int(0.7*length):int(0.85*length)]
-    val = files[int(0.85*length):]
+# brats volume-wise split
+unique_volumes = sorted(list(set(int(row['volume']) for row in dataset_files)))
+random.shuffle(unique_volumes)
+n = len(unique_volumes)
+train_ids = set(unique_volumes[:int(0.7*n)])
+test_ids = set(unique_volumes[int(0.7*n):int(0.85*n)])
+val_ids = set(unique_volumes[int(0.85*n):])
 
-    split_folders = zip(["train", "test", "val"], [train,test,val])
-    for split_folder,file_list in list(split_folders):
-        os.makedirs(f"dataset_split_segmentation/{split_folder}/images/{tumor_type}", exist_ok=True)
-        os.makedirs(f"dataset_split_segmentation/{split_folder}/masks/{tumor_type}", exist_ok=True)
-        'dataset_split_segmentation/train/images/glioma/0877_glioma.jpg'
-        for filename in file_list:
-            shutil.move(os.path.join("cleaned_dataset", "images", tumor_type, filename),os.path.join("dataset_split_segmentation",split_folder,"images",tumor_type,filename))
-            shutil.move(os.path.join("cleaned_dataset", "masks", tumor_type, filename),os.path.join("dataset_split_segmentation",split_folder,"masks",tumor_type,filename))
+for filename in os.listdir(os.path.join(temp_path, 'images')):
+    text_parts = filename.split("_")
+    try:
+        vol_id = int(text_parts[2])
+    except (IndexError, ValueError):
+        continue
 
-shutil.rmtree("cleaned_dataset")
+    if vol_id in train_ids:
+        split_folder = "train"
+    elif vol_id in val_ids:
+        split_folder = "val"
+    else:
+        split_folder = "test"
+    
+    shutil.move(os.path.join(temp_path, 'images', filename), os.path.join("dataset_split_segmentation", split_folder, "images", filename))
+    shutil.move(os.path.join(temp_path, 'masks', filename), os.path.join("dataset_split_segmentation", split_folder, "masks", filename))
 
-
-print(f"train images count: {len(os.listdir("dataset_split_segmentation/train/images/meningioma")) + len(os.listdir("dataset_split_segmentation/train/images/glioma")) + len(os.listdir("dataset_split_segmentation/train/images/pituitary")) }")
-print(f"train masks count: {len(os.listdir("dataset_split_segmentation/train/masks/meningioma")) + len(os.listdir("dataset_split_segmentation/train/masks/glioma")) + len(os.listdir("dataset_split_segmentation/train/masks/pituitary")) }")
-print(f"test images count: {len(os.listdir("dataset_split_segmentation/test/images/meningioma")) + len(os.listdir("dataset_split_segmentation/test/images/glioma")) + len(os.listdir("dataset_split_segmentation/test/images/pituitary")) }")
-print(f"test masks count: {len(os.listdir("dataset_split_segmentation/test/masks/meningioma")) + len(os.listdir("dataset_split_segmentation/test/masks/glioma")) + len(os.listdir("dataset_split_segmentation/test/masks/pituitary")) }")
-print(f"val images count: {len(os.listdir("dataset_split_segmentation/val/images/meningioma")) + len(os.listdir("dataset_split_segmentation/val/images/glioma")) + len(os.listdir("dataset_split_segmentation/val/images/pituitary")) }")
-print(f"val masks count: {len(os.listdir("dataset_split_segmentation/val/masks/meningioma")) + len(os.listdir("dataset_split_segmentation/val/masks/glioma")) + len(os.listdir("dataset_split_segmentation/val/masks/pituitary")) }")
+if os.path.exists(temp_path): shutil.rmtree(temp_path)
